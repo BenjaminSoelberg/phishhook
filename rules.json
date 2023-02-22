@@ -1,26 +1,8 @@
 [
 	{
-		"name": "GitHub",
-		"brand": "github",
-		"tlds": [
-			"com",
-			"co.uk"
-		],
-		"sub_domains": [
-			"www",
-			"*.services"
-		]
-	},
-	{
-		"name": "Apple",
-		"brand": "apple",
-		"tlds": [
-			"com",
-			"dk"
-		],
-		"sub_domains": [
-			"www",
-			"icloud"
-		]
+		"brand": "Danmarks Radio",
+		"name": "dr",
+		"tlds": ["dk"],
+		"sub_domains": []
 	}
 ]
