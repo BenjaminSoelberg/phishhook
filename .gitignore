@@ -1,5 +1,6 @@
 /data.db
 /venv/
-/data.db
 /data.db-shm
 /data.db-wal
+/domains.txt
+/top10milliondomains.csv
