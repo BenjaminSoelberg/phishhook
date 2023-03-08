@@ -2,14 +2,15 @@
 
 import asyncio
 import json
+from itertools import product
 from ssl import SSLContext
 
 import aioconsole
 import websockets
+from more_itertools import roundrobin
 from persistqueue import Empty, SQLiteQueue, SQLiteAckQueue
-from websockets.exceptions import ConnectionClosedError
 
-from rule import Rule
+from brand import Brand
 
 loop = asyncio.get_event_loop()
 
@@ -18,21 +19,17 @@ def is_idn(domain: str):
     return domain != domain.encode('idna')
 
 
-def read_rules():
-    with open(file='rules.json', mode='r') as f:
+def read_brands() -> list[Brand]:
+    with open(file='brands.json', mode='r') as f:
         json_data: str = f.read()
-        return Rule.Schema().loads(json_data, many=True)
-
-    # # Generate white lists
-    # for rule in self._rules:
-    #     if rule.name in domain:
-    #         pass
+        return Brand.Schema().loads(json_data, many=True)
 
 
 class Processor:
 
-    def __init__(self, uri: str = 'wss://certstream.calidog.io/', auto_remove: bool = False, rules: list[Rule] = None):
-        self._rules = rules
+    def __init__(self, uri: str = 'wss://certstream.calidog.io/', auto_remove: bool = False,
+                 brands: list[Brand] = None):
+        self._brands = brands
         self._uri = uri
         self._auto_remove: bool = auto_remove
 
@@ -46,55 +43,141 @@ class Processor:
 
         super().__init__()
 
-    async def query(self):
+    # noinspection PyBroadException
+    async def query(self) -> None:
+        print("Connecting...")
         queried: int = 0
         while True:
             try:
                 async with websockets.connect(self._uri, ssl=self._ssl_context) as ws:
                     print("Connected")
                     while True:
-                        data = await ws.recv()
-                        if queried % 1000 == 0 or queried == 0:
+                        if queried % 10000 == 0 or queried == 0:
                             print(f'Queried certificates: {queried}')
+                        data = await ws.recv()
                         queried += 1
                         doc = json.loads(data)
                         for domain in doc['data']['leaf_cert']['all_domains']:
                             self._queue.put(domain)
-            except ConnectionClosedError:
-                print("Reconnecting...")
-                pass
+            # except ConnectionClosedError:
+            #   print(f"Reconnecting {ConnectionClosedError}...")
+            # except CancelledError:
+            #    print(f"Reconnecting {CancelledError}...")
+            # except TimeoutError:
+            #    print(f"Reconnecting {TimeoutError}...")
+            except BaseException:
+                print(f"Reconnecting {BaseException.__class__}...")
 
-    async def process_queue(self):
+    async def process_queue(self) -> None:
         processed: int = 0
         while True:
+            if processed % 10000 == 0 or processed == 0:
+                print(f'Processed domains: {processed}')
+
             try:
                 domain: str = self._queue.get_nowait()
-                if domain is not None:
-                    if processed % 1000 == 0 or processed == 0:
-                        print(f'Processed domains: {processed}')
-                    processed += 1
-                    for rule in self._rules:
-                        if rule.name in domain:
-                            print(f"HIT: {rule.brand} {domain}")
+                if domain is None:
+                    continue
+
+                self.check_domain(domain)
+
             except Empty:
-                await asyncio.sleep(0.1)
+                await asyncio.sleep(0.5)
+
+            processed += 1
+
+    def check_domain(self, domain):
+        for brand in self._brands:
+            if not brand.enabled:
+                continue
+
+            accepted_domains: set[str] = set()
+            unknown_subdomains: set[str] = set()
+            suspicious_domains: dict[str, int] = {}
+            for known_domain in brand.known_domains:
+                # ------------------------------------
+                # ---- Check for direct ownership ----
+                # ------------------------------------
+                if domain == known_domain:
+                    # Found known domains
+                    accepted_domains.add(domain)
+                    continue
+
+                if known_domain.startswith('*.'):
+                    if domain.endswith(known_domain[1:]):
+                        # Found known subdomains
+                        accepted_domains.add(domain)
+                        continue
+                    # Remove prefix and keep searching
+                    known_domain = known_domain[2:]
+                elif domain.endswith('.' + known_domain):
+                    # Found unknown subdomain
+                    unknown_subdomains.add(domain)
+                    continue
+
+                # --------------------------------
+                # ---- Check for permutations ----
+                # --------------------------------
+                known_domain_words = known_domain.replace('.', ' ').replace('-', ' ').split(' ')
+                perms = ["".join(roundrobin(r, known_domain_words)).replace(' ', '')
+                         for r in product(['.', '-', ' '], repeat=(len(known_domain_words) + 1))]
+
+                # Stage 1: look for domain contains something like ['.post.nord.dk.', '.post.nord.dk-', '.post.nord.dk', '.post.nord-dk-', '.post.nord-dk', '.post.norddk', '.post-nord-dk-', '.post-nord-dk', '.post-norddk', '.postnorddk', '-post-nord-dk-', '-post-nord-dk', '-post-norddk', '-postnorddk', 'postnorddk']
+                [self.score_contains(suspicious_domains, domain, prospect) for prospect in perms]
+
+                # Stage 2: permutate words in different order
+
+            # Remove from unknown_subdomains if they also exist in accepted_domains
+            unknown_subdomains -= accepted_domains
+            # Remove from suspicious_domains if they also exist in accepted_domains or unknown_subdomains
+            [suspicious_domains.pop(d) for d in unknown_subdomains | accepted_domains if d in suspicious_domains]
+
+            for accepted_domain in accepted_domains:
+                print(f'Known       {brand.brand} | 0 {accepted_domain}')
+            for unknown_subdomain in unknown_subdomains:
+                print(f'Unknown sub {brand.brand} | 0 {unknown_subdomain}')
+            for suspicious_domain, score in suspicious_domains.items():
+                print(f'Suspicious  {brand.brand} | {score} {suspicious_domain}')
+
+    @staticmethod
+    def score_contains(score_card: dict[str, int], domain: str, prospect: str):
+        score: int = 0
+        if domain.startswith(prospect) or domain.endswith(prospect):
+            score = 4
+        elif prospect in domain:
+            score = 1 + (prospect[0] == '.' or prospect[0] == '-') + (prospect[-1] == '.' or prospect[-1] == '-')
+
+        if score == 0:
+            return
+
+        if domain in score_card:
+            score_card[domain] = max(score, score_card[domain])
+        else:
+            score_card[domain] = score
 
 
 async def main():
-    # Read rules
-    rules = read_rules()
+    # Read brands
+    brands = read_brands()
 
-    processor: Processor = Processor(auto_remove=False, rules=rules)
-    # Schedule coroutines
-    asyncio.ensure_future(processor.query())
-    asyncio.ensure_future(processor.process_queue())
+    processor: Processor = Processor(auto_remove=True, brands=brands)
 
-    # Keep running until ctrl-d
-    while True:
-        try:
-            await aioconsole.ainput()
-        except EOFError:
-            break
+    if False:
+        with open(file='phishingdomains.txt', mode='r') as file:
+            for line in file:
+                domain = line.rstrip()
+                processor.check_domain(domain)
+    else:
+        # Schedule coroutines
+        asyncio.ensure_future(processor.query())
+        asyncio.ensure_future(processor.process_queue())
+
+        # Keep running until ctrl-d
+        while True:
+            try:
+                await aioconsole.ainput()
+            except EOFError:
+                break
 
 
 if __name__ == '__main__':
