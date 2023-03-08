@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-
 import asyncio
 import json
+import logging
+import sys
 from itertools import product
 from ssl import SSLContext
 
@@ -12,6 +13,13 @@ from persistqueue import Empty, SQLiteQueue, SQLiteAckQueue
 
 from brand import Brand
 
+logging.basicConfig(
+    stream=sys.stderr,
+    format='[%(asctime)s] %(levelname)s - %(message)s',
+    level=logging.INFO
+)
+
+log = logging.getLogger()
 loop = asyncio.get_event_loop()
 
 
@@ -27,8 +35,11 @@ def read_brands() -> list[Brand]:
 
 class Processor:
 
-    def __init__(self, uri: str = 'wss://certstream.calidog.io/', auto_remove: bool = False,
+    def __init__(self,
+                 uri: str = 'wss://certstream.calidog.io/',
+                 auto_remove: bool = False,
                  brands: list[Brand] = None):
+
         self._brands = brands
         self._uri = uri
         self._auto_remove: bool = auto_remove
@@ -45,34 +56,34 @@ class Processor:
 
     # noinspection PyBroadException
     async def query(self) -> None:
-        print("Connecting...")
+        log.info('Connecting...')
         queried: int = 0
         while True:
             try:
                 async with websockets.connect(self._uri, ssl=self._ssl_context) as ws:
-                    print("Connected")
+                    log.info('Connected')
                     while True:
                         if queried % 10000 == 0 or queried == 0:
-                            print(f'Queried certificates: {queried}')
+                            log.info(f'Queried certificates: {queried}')
                         data = await ws.recv()
                         queried += 1
                         doc = json.loads(data)
                         for domain in doc['data']['leaf_cert']['all_domains']:
                             self._queue.put(domain)
             # except ConnectionClosedError:
-            #   print(f"Reconnecting {ConnectionClosedError}...")
+            #   print(f'Reconnecting {ConnectionClosedError}...')
             # except CancelledError:
-            #    print(f"Reconnecting {CancelledError}...")
+            #    print(f'Reconnecting {CancelledError}...')
             # except TimeoutError:
-            #    print(f"Reconnecting {TimeoutError}...")
+            #    print(f'Reconnecting {TimeoutError}...')
             except BaseException:
-                print(f"Reconnecting {BaseException.__class__}...")
+                log.warning(f'Reconnecting {BaseException.__class__}...')
 
     async def process_queue(self) -> None:
         processed: int = 0
         while True:
             if processed % 10000 == 0 or processed == 0:
-                print(f'Processed domains: {processed}')
+                log.info(f'Processed domains: {processed}')
 
             try:
                 domain: str = self._queue.get_nowait()
@@ -119,7 +130,7 @@ class Processor:
                 # ---- Check for permutations ----
                 # --------------------------------
                 known_domain_words = known_domain.replace('.', ' ').replace('-', ' ').split(' ')
-                perms = ["".join(roundrobin(r, known_domain_words)).replace(' ', '')
+                perms = [''.join(roundrobin(r, known_domain_words)).replace(' ', '')
                          for r in product(['.', '-', ' '], repeat=(len(known_domain_words) + 1))]
 
                 # Stage 1: look for domain contains something like ['.post.nord.dk.', '.post.nord.dk-', '.post.nord.dk', '.post.nord-dk-', '.post.nord-dk', '.post.norddk', '.post-nord-dk-', '.post-nord-dk', '.post-norddk', '.postnorddk', '-post-nord-dk-', '-post-nord-dk', '-post-norddk', '-postnorddk', 'postnorddk']
