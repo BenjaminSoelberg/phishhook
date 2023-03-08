@@ -5,11 +5,11 @@ from marshmallow_dataclass import add_schema
 
 @add_schema
 @dataclass(eq=True, frozen=True)
-class Rule:
+class Brand:
     brand: str
-    name: str
-    tlds: list[str]
-    sub_domains: list[str]
+    names: list[str]
+    known_domains: list[str]
+    enabled: bool = True
 
     class Meta:
         ordered = True

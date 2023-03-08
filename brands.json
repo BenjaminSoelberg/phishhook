@@ -1,0 +1,56 @@
+[
+  {
+    "enabled": false,
+    "brand": "Kundeservice",
+    "names": [
+      "kundeservice"
+    ],
+    "known_domains": [
+      "kundeservice"
+    ]
+  },
+  {
+    "enabled": false,
+    "brand": "Visa",
+    "names": [
+      "visa"
+    ],
+    "known_domains": [
+      "visa.com"
+    ]
+  },
+  {
+    "brand": "Mobile Pay",
+    "names": [
+      "mobile pay"
+    ],
+    "known_domains": [
+      "mobilepay.dk"
+    ]
+  },
+  {
+    "brand": "Post Nord",
+    "names": [
+      "post nord",
+      "post danmark",
+      "post dk"
+    ],
+    "known_domains": [
+      "post-nord.dk",
+      "post-nord.com",
+      "post-danmark.dk",
+      "post-danmark.com",
+      "post.dk"
+    ]
+  },
+  {
+    "brand": "Apple",
+    "names": [
+      "apple com"
+    ],
+    "known_domains": [
+      "*.apple.com",
+      "apple.com"
+    ]
+  }
+]
