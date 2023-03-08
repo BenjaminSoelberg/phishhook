@@ -174,7 +174,7 @@ async def main():
     processor: Processor = Processor(auto_remove=True, brands=brands)
 
     if False:
-        with open(file='phishingdomains.txt', mode='r') as file:
+        with open(file='phishingdomains.bin', mode='r') as file:
             for line in file:
                 domain = line.rstrip()
                 processor.check_domain(domain)
