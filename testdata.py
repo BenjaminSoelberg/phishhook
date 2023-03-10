@@ -1,5 +1,5 @@
 from brand import Brand
-
+# TODO: Fix me!
 if __name__ == '__main__':
     github = Brand(name='GitHub', brand='github', tlds=['com', 'co.uk'], sub_domains=['www', '*.services'])
     apple = Brand(name='Apple', brand='apple', tlds=['com', 'dk'], sub_domains=['www', 'icloud'])

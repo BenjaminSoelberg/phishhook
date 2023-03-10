@@ -3,15 +3,22 @@ import asyncio
 import json
 import logging
 import sys
-from itertools import product
+from asyncio import CancelledError, Task
+from itertools import product, permutations
 from ssl import SSLContext
+from typing import Any
 
 import aioconsole
 import websockets
 from more_itertools import roundrobin
 from persistqueue import Empty, SQLiteQueue, SQLiteAckQueue
+from websockets.exceptions import ConnectionClosedError
 
 from brand import Brand
+
+DOT = '.'
+DASH = '-'
+DOT_DASH = '.-'
 
 logging.basicConfig(
     stream=sys.stderr,
@@ -33,6 +40,7 @@ def read_brands() -> list[Brand]:
         return Brand.Schema().loads(json_data, many=True)
 
 
+# noinspection PyMethodMayBeStatic
 class Processor:
 
     def __init__(self,
@@ -43,6 +51,7 @@ class Processor:
         self._brands = brands
         self._uri = uri
         self._auto_remove: bool = auto_remove
+        self.total_permutations_checked = 0
 
         # Setup queue
         if auto_remove:
@@ -70,14 +79,14 @@ class Processor:
                         doc = json.loads(data)
                         for domain in doc['data']['leaf_cert']['all_domains']:
                             self._queue.put(domain)
-            # except ConnectionClosedError:
-            #   print(f'Reconnecting {ConnectionClosedError}...')
-            # except CancelledError:
-            #    print(f'Reconnecting {CancelledError}...')
-            # except TimeoutError:
-            #    print(f'Reconnecting {TimeoutError}...')
-            except BaseException:
-                log.warning(f'Reconnecting {BaseException.__class__}...')
+            except ConnectionClosedError:
+                print(f'Connection was closed, reconnecting...')
+            except CancelledError:
+                print(f'Connection was cancelled, reconnecting...')
+            except TimeoutError:
+                print(f'Connection timedout, reconnecting...')
+            except Exception as e:
+                log.warning(f'Unknown exceptionReconnecting {e}...')
 
     async def process_queue(self) -> None:
         processed: int = 0
@@ -97,7 +106,7 @@ class Processor:
 
             processed += 1
 
-    def check_domain(self, domain):
+    def check_domain(self, specimen):
         for brand in self._brands:
             if not brand.enabled:
                 continue
@@ -109,62 +118,160 @@ class Processor:
                 # ------------------------------------
                 # ---- Check for direct ownership ----
                 # ------------------------------------
-                if domain == known_domain:
+                if specimen == known_domain:
                     # Found known domains
-                    accepted_domains.add(domain)
+                    accepted_domains.add(specimen)
                     continue
 
                 if known_domain.startswith('*.'):
-                    if domain.endswith(known_domain[1:]):
+                    if specimen.endswith(known_domain[1:]):
                         # Found known subdomains
-                        accepted_domains.add(domain)
+                        accepted_domains.add(specimen)
                         continue
                     # Remove prefix and keep searching
                     known_domain = known_domain[2:]
-                elif domain.endswith('.' + known_domain):
+                elif specimen.endswith('.' + known_domain):
                     # Found unknown subdomain
-                    unknown_subdomains.add(domain)
+                    unknown_subdomains.add(specimen)
                     continue
 
                 # --------------------------------
                 # ---- Check for permutations ----
                 # --------------------------------
                 known_domain_words = known_domain.replace('.', ' ').replace('-', ' ').split(' ')
-                perms = [''.join(roundrobin(r, known_domain_words)).replace(' ', '')
-                         for r in product(['.', '-', ' '], repeat=(len(known_domain_words) + 1))]
 
-                # Stage 1: look for domain contains something like ['.post.nord.dk.', '.post.nord.dk-', '.post.nord.dk', '.post.nord-dk-', '.post.nord-dk', '.post.norddk', '.post-nord-dk-', '.post-nord-dk', '.post-norddk', '.postnorddk', '-post-nord-dk-', '-post-nord-dk', '-post-norddk', '-postnorddk', 'postnorddk']
-                [self.score_contains(suspicious_domains, domain, prospect) for prospect in perms]
+                # Optimize search speed
+                if not self.contains_all_the_words(specimen, known_domain_words):
+                    continue
 
-                # Stage 2: permutate words in different order
+                # Stage 0
+                self.score_stage_0(known_domain, specimen, suspicious_domains)
+
+                # Stage 1: look for domain contains something like 'services-apple.com.' ...
+                separators = set(  # TODO: Result should be cached
+                    product(['.', '-', ' '], repeat=(len(known_domain_words) - 1))
+                )
+
+                stage_1_permutations: set[str] = {
+                    ''.join(roundrobin(known_domain_words, separator)).replace(' ', '')
+                    for separator in separators
+                }
+                # Remove already processed at Stage 0
+                stage_1_permutations = set(filter(lambda prospect: known_domain not in prospect, stage_1_permutations))
+
+                [self.score_contains(suspicious_domains, specimen, prospect, bias=1)
+                 for prospect in stage_1_permutations]
+
+                # Stage 2: look for domain contains something like '.com.services.apple.' ... #
+                known_domain_words_permutations = list(permutations(known_domain_words))
+                stage_2_permutations: set[str] = {
+                    ''.join(roundrobin(known_domain_words_permutation, separator)).replace(' ', '')
+                    for separator in separators
+                    for known_domain_words_permutation in known_domain_words_permutations
+                }
+                # Remove dupes already checked (we do this even so the score would have been smaller)
+                stage_2_permutations = set(
+                    filter(lambda prospect: known_domain not in prospect, stage_2_permutations)) - stage_1_permutations
+                [self.score_contains(suspicious_domains, specimen, prospect, bias=0)
+                 for prospect in stage_2_permutations]
 
             # Remove from unknown_subdomains if they also exist in accepted_domains
             unknown_subdomains -= accepted_domains
             # Remove from suspicious_domains if they also exist in accepted_domains or unknown_subdomains
             [suspicious_domains.pop(d) for d in unknown_subdomains | accepted_domains if d in suspicious_domains]
 
-            for accepted_domain in accepted_domains:
-                print(f'Known       {brand.brand} | 0 {accepted_domain}')
+            # for accepted_domain in accepted_domains:
+            #     print(f'Known       {brand.brand} | 0 {accepted_domain}')
             for unknown_subdomain in unknown_subdomains:
                 print(f'Unknown sub {brand.brand} | 0 {unknown_subdomain}')
             for suspicious_domain, score in suspicious_domains.items():
                 print(f'Suspicious  {brand.brand} | {score} {suspicious_domain}')
 
-    @staticmethod
-    def score_contains(score_card: dict[str, int], domain: str, prospect: str):
+    def score_stage_0(self, known_domain, specimen, suspicious_domains):
+        return self.score_contains(suspicious_domains, specimen, known_domain, bias=2)
+
+    def contains_all_the_words(self, domain, known_domain_words):
+        for word in known_domain_words:
+            if word not in domain:
+                return False
+        return True
+
+    def score_contains(self, score_card: dict[str, int], specimen: str, artifact: str, bias: int):
+        if self.total_permutations_checked % 10000 == 0 or self.total_permutations_checked == 0:
+            log.info(f'Permutations checked {self.total_permutations_checked}')
+        self.total_permutations_checked += 1
+
         score: int = 0
-        if domain.startswith(prospect) or domain.endswith(prospect):
-            score = 4
-        elif prospect in domain:
-            score = 1 + (prospect[0] == '.' or prospect[0] == '-') + (prospect[-1] == '.' or prospect[-1] == '-')
+        if specimen.startswith(artifact):
+            score += 4 + self.has_dot_or_dash_at_index(specimen, len(artifact))
+        if specimen.endswith(artifact):
+            score += 4 + self.has_dash_at_index(specimen, len(specimen) - len(artifact) - 1)
+        # TODO:We could also think about counting the number of artifact repetitions in the specimen
+        if score == 0 and artifact in specimen:
+            score += 1 \
+                     + self.has_dot_or_dash_at_index(specimen, specimen.index(artifact) - 1) \
+                     + self.has_dot_or_dash_at_index(specimen, specimen.index(artifact) + len(artifact))
+
+        if score == 0:
+            return False
+
+        score += bias
+        if specimen in score_card:
+            score_card[specimen] = max(score, score_card[specimen])
+        else:
+            score_card[specimen] = score
+
+        return True
+
+    def starts_with_dot(self, name: str) -> bool:
+        return name and name[0] == DOT
+
+    def starts_with_dash(self, name: str) -> bool:
+        return name and name[0] == DASH
+
+    def starts_with_dot_or_dash(self, name: str) -> bool:
+        return name and name[0] in DOT_DASH
+
+    def ends_with_dot(self, name: str) -> bool:
+        return name and name[-1] == DOT
+
+    def ends_with_dash(self, name: str) -> bool:
+        return name and name[-1] == DASH
+
+    def ends_with_dot_or_dash(self, name: str) -> bool:
+        return name and name[-1] in DOT_DASH
+
+    def has_dash_at_index(self, specimen: str, index: int) -> bool:
+        if len(specimen) < index + 1:
+            return False
+        return specimen[index] == DASH
+
+    def has_dot_or_dash_at_index(self, specimen: str, index: int) -> bool:
+        if len(specimen) < index + 1:
+            return False
+        return specimen[index] in DOT_DASH
+
+    def score_contains2(self, score_card: dict[str, int], speciment: str, name: str, bias: int):
+        if self.total_permutations_checked % 10000 == 0 or self.total_permutations_checked == 0:
+            log.info(f'Permutations checked {self.total_permutations_checked}')
+        self.total_permutations_checked += 1
+
+        score: int = 0
+        if speciment.startswith(name):
+            score = 4 + self.ends_with_dot_or_dash(name)
+        if speciment.endswith(name):
+            score = 4 + (self.starts_with_dash(name))
+        if score == 0 and name in speciment:
+            score = 1 + (self.starts_with_dot(name) or name[0] == '-') + self.ends_with_dot_or_dash(name)
 
         if score == 0:
             return
 
-        if domain in score_card:
-            score_card[domain] = max(score, score_card[domain])
+        score += bias
+        if speciment in score_card:
+            score_card[speciment] = max(score, score_card[speciment])
         else:
-            score_card[domain] = score
+            score_card[speciment] = score
 
 
 async def main():
@@ -176,12 +283,13 @@ async def main():
     if False:
         with open(file='phishingdomains.bin', mode='r') as file:
             for line in file:
-                domain = line.rstrip()
-                processor.check_domain(domain)
+                domain = line.split('#')[0].strip()
+                if domain:
+                    processor.check_domain(domain)
     else:
         # Schedule coroutines
-        asyncio.ensure_future(processor.query())
-        asyncio.ensure_future(processor.process_queue())
+        processor_future: Task[Any] = asyncio.ensure_future(processor.query())
+        queue_future: Task[Any] = asyncio.ensure_future(processor.process_queue())
 
         # Keep running until ctrl-d
         while True:

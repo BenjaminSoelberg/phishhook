@@ -1,22 +1,25 @@
 [
   {
     "enabled": false,
-    "brand": "Kundeservice",
+    "brand": "Danske Bank",
     "names": [
-      "kundeservice"
+      ""
     ],
     "known_domains": [
-      "kundeservice"
+      "danske-bank.dk",
+      "danskebank.dk"
     ]
   },
   {
-    "enabled": false,
     "brand": "Visa",
     "names": [
       "visa"
     ],
     "known_domains": [
-      "visa.com"
+      "verifiedbyvisa.com",
+      "visa.ca",
+      "visa.com",
+      "visaca.com"
     ]
   },
   {
@@ -25,6 +28,7 @@
       "mobile pay"
     ],
     "known_domains": [
+      "mobile-pay.dk",
       "mobilepay.dk"
     ]
   },
@@ -49,8 +53,17 @@
       "apple com"
     ],
     "known_domains": [
-      "*.apple.com",
-      "apple.com"
+      "aaplimg.com",
+      "apple-dns.cn",
+      "apple-dns.net",
+      "apple-mapkit.com",
+      "apple.co",
+      "apple.com",
+      "apple.com.cn",
+      "apple.news",
+      "cdn-apple.com",
+      "mzstatic.com,",
+      "*.apple.com"
     ]
   }
 ]
