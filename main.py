@@ -4,6 +4,7 @@ import json
 import logging
 import sys
 from asyncio import CancelledError, Task
+from collections import deque
 from itertools import product, permutations
 from ssl import SSLContext
 from typing import Any
@@ -18,7 +19,10 @@ from brand import Brand
 
 DOT = '.'
 DASH = '-'
+SPACE = ' '
 DOT_DASH = '.-'
+SEEN_DOMAIN_CACHE_SIZE = 100000
+PROSPECT_DOMAIN_CACHE_SIZE = 1000
 
 logging.basicConfig(
     stream=sys.stderr,
@@ -52,12 +56,13 @@ class Processor:
         self._uri = uri
         self._auto_remove: bool = auto_remove
         self.total_permutations_checked = 0
-
+        self._seen_domain_cache = deque(maxlen=SEEN_DOMAIN_CACHE_SIZE)
+        self._prospect_domain_cache = deque(maxlen=PROSPECT_DOMAIN_CACHE_SIZE)
         # Setup queue
         if auto_remove:
-            self._queue: SQLiteQueue = SQLiteQueue('.', auto_commit=True)
+            self._queue: SQLiteQueue = SQLiteQueue(DOT, auto_commit=True)
         else:
-            self._queue: SQLiteAckQueue = SQLiteAckQueue('.', auto_commit=True)
+            self._queue: SQLiteAckQueue = SQLiteAckQueue(DOT, auto_commit=True)
 
         self._ssl_context: SSLContext = SSLContext()
 
@@ -78,15 +83,20 @@ class Processor:
                         queried += 1
                         doc = json.loads(data)
                         for domain in doc['data']['leaf_cert']['all_domains']:
-                            self._queue.put(domain)
+                            if domain.startswith('*.'):
+                                domain = domain[2:]
+                            if domain not in self._seen_domain_cache:
+                                self._seen_domain_cache.append(domain)
+                                self._queue.put(domain)
+
             except ConnectionClosedError:
-                print(f'Connection was closed, reconnecting...')
+                log.warning('Connection was closed, reconnecting...')
             except CancelledError:
-                print(f'Connection was cancelled, reconnecting...')
+                log.warning('Connection was cancelled, reconnecting...')
             except TimeoutError:
-                print(f'Connection timedout, reconnecting...')
+                log.warning('Connection timeout, reconnecting...')
             except Exception as e:
-                log.warning(f'Unknown exceptionReconnecting {e}...')
+                log.warning(f'Unknown exception {e}, reconnecting...')
 
     async def process_queue(self) -> None:
         processed: int = 0
@@ -130,7 +140,7 @@ class Processor:
                         continue
                     # Remove prefix and keep searching
                     known_domain = known_domain[2:]
-                elif specimen.endswith('.' + known_domain):
+                elif specimen.endswith(DOT + known_domain):
                     # Found unknown subdomain
                     unknown_subdomains.add(specimen)
                     continue
@@ -138,18 +148,24 @@ class Processor:
                 # --------------------------------
                 # ---- Check for permutations ----
                 # --------------------------------
-                known_domain_words = known_domain.replace('.', ' ').replace('-', ' ').split(' ')
+                known_domain_words = known_domain.replace(DOT, SPACE).replace(DASH, SPACE).split(SPACE)
 
                 # Optimize search speed
                 if not self.contains_all_the_words(specimen, known_domain_words):
                     continue
+
+                if specimen not in self._prospect_domain_cache:
+                    # The prospect logging helps to find missing detection patterns
+                    # We cache them as the same domain could be a prospect across known domains
+                    self._prospect_domain_cache.append(specimen)
+                    log.debug(f'Prospect {specimen} for brand {brand.brand}')
 
                 # Stage 0
                 self.score_stage_0(known_domain, specimen, suspicious_domains)
 
                 # Stage 1: look for domain contains something like 'services-apple.com.' ...
                 separators = set(  # TODO: Result should be cached
-                    product(['.', '-', ' '], repeat=(len(known_domain_words) - 1))
+                    product([DOT, DASH, SPACE], repeat=(len(known_domain_words) - 1))
                 )
 
                 stage_1_permutations: set[str] = {
@@ -196,7 +212,7 @@ class Processor:
                 return False
         return True
 
-    def score_contains(self, score_card: dict[str, int], specimen: str, artifact: str, bias: int):
+    def score_contains(self, score_card: dict[str, int], specimen: str, artifact: str, bias: int) -> bool:
         if self.total_permutations_checked % 10000 == 0 or self.total_permutations_checked == 0:
             log.info(f'Permutations checked {self.total_permutations_checked}')
         self.total_permutations_checked += 1
@@ -250,28 +266,6 @@ class Processor:
         if len(specimen) < index + 1:
             return False
         return specimen[index] in DOT_DASH
-
-    def score_contains2(self, score_card: dict[str, int], speciment: str, name: str, bias: int):
-        if self.total_permutations_checked % 10000 == 0 or self.total_permutations_checked == 0:
-            log.info(f'Permutations checked {self.total_permutations_checked}')
-        self.total_permutations_checked += 1
-
-        score: int = 0
-        if speciment.startswith(name):
-            score = 4 + self.ends_with_dot_or_dash(name)
-        if speciment.endswith(name):
-            score = 4 + (self.starts_with_dash(name))
-        if score == 0 and name in speciment:
-            score = 1 + (self.starts_with_dot(name) or name[0] == '-') + self.ends_with_dot_or_dash(name)
-
-        if score == 0:
-            return
-
-        score += bias
-        if speciment in score_card:
-            score_card[speciment] = max(score, score_card[speciment])
-        else:
-            score_card[speciment] = score
 
 
 async def main():
