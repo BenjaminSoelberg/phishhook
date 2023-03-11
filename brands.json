@@ -1,9 +1,67 @@
 [
   {
-    "enabled": false,
+    "brand": "Mobile Pay",
+    "names": [
+      "mobile pay"
+    ],
+    "known_domains": [
+      "mobile-pay.dk",
+      "mobilepay.dk"
+    ]
+  },
+  {
+    "brand": "MitID",
+    "names": [
+      "mit id"
+    ],
+    "known_domains": [
+      "mit-id.dk",
+      "mitid.dk"
+    ]
+  },
+  {
+    "brand": "NemID",
+    "names": [
+      "nem id"
+    ],
+    "known_domains": [
+      "nem-id.nu",
+      "nemid.nu"
+    ]
+  },
+  {
+    "brand": "Nets",
+    "names": [
+      "nets"
+    ],
+    "known_domains": [
+      "nets.dk"
+    ]
+  },
+  {
+    "brand": "Post Nord",
+    "names": [
+      "post nord",
+      "post danmark",
+      "post dk"
+    ],
+    "known_domains": [
+      "post-nord.dk",
+      "post-nord.com",
+      "post-danmark.dk",
+      "post-danmark.com",
+      "post.dk",
+      "www.post-nord.dk",
+      "www.post-nord.com",
+      "www.post-danmark.dk",
+      "www.post-danmark.com",
+      "www.post.dk"
+    ]
+  },
+  {
     "brand": "Danske Bank",
     "names": [
-      ""
+      "danske bank"
     ],
     "known_domains": [
       "danske-bank.dk",
@@ -20,31 +78,6 @@
       "visa.ca",
       "visa.com",
       "visaca.com"
-    ]
-  },
-  {
-    "brand": "Mobile Pay",
-    "names": [
-      "mobile pay"
-    ],
-    "known_domains": [
-      "mobile-pay.dk",
-      "mobilepay.dk"
-    ]
-  },
-  {
-    "brand": "Post Nord",
-    "names": [
-      "post nord",
-      "post danmark",
-      "post dk"
-    ],
-    "known_domains": [
-      "post-nord.dk",
-      "post-nord.com",
-      "post-danmark.dk",
-      "post-danmark.com",
-      "post.dk"
     ]
   },
   {
