@@ -22,7 +22,6 @@ DASH = '-'
 SPACE = ' '
 DOT_DASH = '.-'
 SEEN_DOMAIN_CACHE_SIZE = 100000
-PROSPECT_DOMAIN_CACHE_SIZE = 1000
 
 logging.basicConfig(
     stream=sys.stderr,
@@ -57,7 +56,6 @@ class Processor:
         self._auto_remove: bool = auto_remove
         self.total_permutations_checked = 0
         self._seen_domain_cache = deque(maxlen=SEEN_DOMAIN_CACHE_SIZE)
-        self._prospect_domain_cache = deque(maxlen=PROSPECT_DOMAIN_CACHE_SIZE)
         # Setup queue
         if auto_remove:
             self._queue: SQLiteQueue = SQLiteQueue(DOT, auto_commit=True)
@@ -124,6 +122,8 @@ class Processor:
             accepted_domains: set[str] = set()
             unknown_subdomains: set[str] = set()
             suspicious_domains: dict[str, int] = {}
+            prospect_domains: set[str] = set()
+
             for known_domain in brand.known_domains:
                 # ------------------------------------
                 # ---- Check for direct ownership ----
@@ -154,14 +154,8 @@ class Processor:
                 if not self.contains_all_the_words(specimen, known_domain_words):
                     continue
 
-                if specimen not in self._prospect_domain_cache:
-                    # The prospect logging helps to find missing detection patterns
-                    # We cache them as the same domain could be a prospect across known domains
-                    self._prospect_domain_cache.append(specimen)
-                    log.debug(f'Prospect {specimen} for brand {brand.brand}')
-
                 # Stage 0
-                self.score_stage_0(known_domain, specimen, suspicious_domains)
+                score: int = self.score_contains(suspicious_domains, specimen, known_domain, bias=2)
 
                 # Stage 1: look for domain contains something like 'services-apple.com.' ...
                 separators = set(  # TODO: Result should be cached
@@ -175,8 +169,8 @@ class Processor:
                 # Remove already processed at Stage 0
                 stage_1_permutations = set(filter(lambda prospect: known_domain not in prospect, stage_1_permutations))
 
-                [self.score_contains(suspicious_domains, specimen, prospect, bias=1)
-                 for prospect in stage_1_permutations]
+                score += sum([self.score_contains(suspicious_domains, specimen, prospect, bias=1)
+                              for prospect in stage_1_permutations])
 
                 # Stage 2: look for domain contains something like '.com.services.apple.' ... #
                 known_domain_words_permutations = list(permutations(known_domain_words))
@@ -188,20 +182,27 @@ class Processor:
                 # Remove dupes already checked (we do this even so the score would have been smaller)
                 stage_2_permutations = set(
                     filter(lambda prospect: known_domain not in prospect, stage_2_permutations)) - stage_1_permutations
-                [self.score_contains(suspicious_domains, specimen, prospect, bias=0)
-                 for prospect in stage_2_permutations]
+                score += sum([self.score_contains(suspicious_domains, specimen, prospect, bias=0) for prospect in
+                              stage_2_permutations])
+
+                if score == 0:
+                    prospect_domains.add(specimen)
 
             # Remove from unknown_subdomains if they also exist in accepted_domains
             unknown_subdomains -= accepted_domains
             # Remove from suspicious_domains if they also exist in accepted_domains or unknown_subdomains
             [suspicious_domains.pop(d) for d in unknown_subdomains | accepted_domains if d in suspicious_domains]
+            # Remove from prospect_domains if they also exist in suspicious_domains, accepted_domains or unknown_subdomains
+            prospect_domains -= suspicious_domains.keys() | unknown_subdomains | accepted_domains
 
             # for accepted_domain in accepted_domains:
             #     print(f'Known       {brand.brand} | 0 {accepted_domain}')
             for unknown_subdomain in unknown_subdomains:
-                print(f'Unknown sub {brand.brand} | 0 {unknown_subdomain}')
+                print(f'Unknown sub [{brand.brand}] | 0 [{unknown_subdomain}]')
             for suspicious_domain, score in suspicious_domains.items():
-                print(f'Suspicious  {brand.brand} | {score} {suspicious_domain}')
+                print(f'Suspicious  [{brand.brand}] | {score} [{suspicious_domain}]')
+            for prospect_domain in prospect_domains:
+                print(f'Prospect    [{brand.brand}] | 0 [{prospect_domain}]')
 
     def score_stage_0(self, known_domain, specimen, suspicious_domains):
         return self.score_contains(suspicious_domains, specimen, known_domain, bias=2)
@@ -212,7 +213,7 @@ class Processor:
                 return False
         return True
 
-    def score_contains(self, score_card: dict[str, int], specimen: str, artifact: str, bias: int) -> bool:
+    def score_contains(self, score_card: dict[str, int], specimen: str, artifact: str, bias: int) -> int:
         if self.total_permutations_checked % 10000 == 0 or self.total_permutations_checked == 0:
             log.info(f'Permutations checked {self.total_permutations_checked}')
         self.total_permutations_checked += 1
@@ -228,16 +229,14 @@ class Processor:
                      + self.has_dot_or_dash_at_index(specimen, specimen.index(artifact) - 1) \
                      + self.has_dot_or_dash_at_index(specimen, specimen.index(artifact) + len(artifact))
 
-        if score == 0:
-            return False
+        if score > 0:
+            score += bias
+            if specimen in score_card:
+                score_card[specimen] = max(score, score_card[specimen])
+            else:
+                score_card[specimen] = score
 
-        score += bias
-        if specimen in score_card:
-            score_card[specimen] = max(score, score_card[specimen])
-        else:
-            score_card[specimen] = score
-
-        return True
+        return score
 
     def starts_with_dot(self, name: str) -> bool:
         return name and name[0] == DOT
