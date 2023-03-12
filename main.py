@@ -238,24 +238,6 @@ class Processor:
 
         return score
 
-    def starts_with_dot(self, name: str) -> bool:
-        return name and name[0] == DOT
-
-    def starts_with_dash(self, name: str) -> bool:
-        return name and name[0] == DASH
-
-    def starts_with_dot_or_dash(self, name: str) -> bool:
-        return name and name[0] in DOT_DASH
-
-    def ends_with_dot(self, name: str) -> bool:
-        return name and name[-1] == DOT
-
-    def ends_with_dash(self, name: str) -> bool:
-        return name and name[-1] == DASH
-
-    def ends_with_dot_or_dash(self, name: str) -> bool:
-        return name and name[-1] in DOT_DASH
-
     def has_dash_at_index(self, specimen: str, index: int) -> bool:
         if len(specimen) < index + 1:
             return False
@@ -273,7 +255,7 @@ async def main():
 
     processor: Processor = Processor(auto_remove=True, brands=brands)
 
-    if False:
+    if True:
         with open(file='phishingdomains.bin', mode='r') as file:
             for line in file:
                 domain = line.split('#')[0].strip()
