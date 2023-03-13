@@ -255,7 +255,7 @@ async def main():
 
     processor: Processor = Processor(auto_remove=True, brands=brands)
 
-    if True:
+    if False:
         with open(file='phishingdomains.bin', mode='r') as file:
             for line in file:
                 domain = line.split('#')[0].strip()
