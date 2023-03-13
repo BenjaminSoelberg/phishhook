@@ -1,50 +1,63 @@
 [
   {
     "brand": "Mobile Pay",
-    "names": [
-      "mobile pay"
-    ],
     "known_domains": [
       "mobile-pay.dk",
       "mobilepay.dk"
+    ],
+    "trigger_words": [
+      "mobile*pay"
+    ],
+    "score_words": [
+      "mobile",
+      "pay"
     ]
   },
   {
     "brand": "MitID",
-    "names": [
-      "mit id"
-    ],
     "known_domains": [
       "mit-id.dk",
       "mitid.dk"
+    ],
+    "trigger_words": [
+      "mit*id"
+    ],
+    "score_words": [
+      "mit",
+      "id"
     ]
   },
   {
     "brand": "NemID",
-    "names": [
-      "nem id"
-    ],
     "known_domains": [
       "nem-id.nu",
       "nemid.nu"
+    ],
+    "trigger_words": [
+      "nem*id"
+    ],
+    "score_words": [
+      "nem",
+      "id"
     ]
   },
   {
     "brand": "Nets",
-    "names": [
-      "nets"
-    ],
     "known_domains": [
       "nets.dk"
+    ],
+    "trigger_words": [
+      "nets"
+    ],
+    "score_words": [
+      "betaling",
+      "faktura",
+      "payment",
+      "pay"
     ]
   },
   {
     "brand": "Post Nord",
-    "names": [
-      "post nord",
-      "post danmark",
-      "post dk"
-    ],
     "known_domains": [
       "post-nord.dk",
       "post-nord.com",
@@ -56,47 +69,153 @@
       "www.post-danmark.dk",
       "www.post-danmark.com",
       "www.post.dk"
+    ],
+    "trigger_words": [
+      "post*nord",
+      "post*danmark",
+      "post*denmark"
+    ],
+    "score_words": [
+      "post",
+      "nord",
+      "danmark",
+      "denmark",
+      "pakke"
     ]
   },
   {
     "brand": "Danske Bank",
-    "names": [
-      "danske bank"
-    ],
     "known_domains": [
       "danske-bank.dk",
       "danskebank.dk"
+    ],
+    "trigger_words": [
+      "danske*bank"
+    ],
+    "score_words": [
+      "danske",
+      "bank"
     ]
   },
   {
     "brand": "Visa",
-    "names": [
-      "visa"
-    ],
     "known_domains": [
-      "verifiedbyvisa.com",
       "visa.ca",
       "visa.com",
-      "visaca.com"
+      "visaca.com",
+      "visa.dk"
+    ],
+    "trigger_words": [
+      "visa"
+    ],
+    "score_words": [
+      "payment",
+      "account",
+      "order"
     ]
   },
   {
     "brand": "Apple",
-    "names": [
-      "apple com"
-    ],
     "known_domains": [
+      "apple.com",
+      "*.apple.com",
+      "apple.co",
+      "apple.com.cn",
       "aaplimg.com",
       "apple-dns.cn",
       "apple-dns.net",
       "apple-mapkit.com",
-      "apple.co",
-      "apple.com",
-      "apple.com.cn",
       "apple.news",
       "cdn-apple.com",
-      "mzstatic.com,",
-      "*.apple.com"
+      "mzstatic.com,"
+    ],
+    "trigger_words": [
+      "apple"
+    ],
+    "score_words": [
+      "account",
+      "problem",
+      "resetting",
+      "support",
+      "appleid",
+      "apple.id",
+      "apple-id",
+      "update",
+      "billing",
+      "activation",
+      "help",
+      "security",
+      "login",
+      "signin",
+      "info",
+      "care",
+      "check",
+      "payment",
+      "auth",
+      "access",
+      "verify",
+      "icloud",
+      "cloud",
+      "id",
+      "iphone",
+      "itunes",
+      "i-tunes",
+      "i.tunes",
+      "1tunes",
+      "store",
+      "service",
+      "services",
+      "confirm",
+      "purchase",
+      "3d",
+      "review",
+      "accessid",
+      "locked",
+      "location",
+      "restore",
+      "setup",
+      "signout",
+      "sign-out",
+      "sign.out",
+      "ticket",
+      "contact",
+      "mail",
+      "protect",
+      "replace",
+      "renewals",
+      "unlock",
+      "maps",
+      "order",
+      "passcode",
+      "pass-code",
+      "pass.code",
+      "onlne",
+      "center",
+      "status",
+      "pay",
+      "billing",
+      "cancel",
+      "appstore",
+      "confirm",
+      "idevice",
+      "i.device",
+      "i-device",
+      "iforgot",
+      "i.forgot",
+      "i-forgot",
+      "docs",
+      "recover",
+      "app",
+      "device",
+      "tracking",
+      "trace",
+      "manage",
+      "management",
+      "profile",
+      "lost",
+      "ios",
+      "subscription",
+      "history"
     ]
   }
 ]
