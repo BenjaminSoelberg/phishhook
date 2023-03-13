@@ -119,10 +119,10 @@ class Processor:
             if not brand.enabled:
                 continue
 
-            accepted_domains: set[str] = set()
-            unknown_subdomains: set[str] = set()
-            suspicious_domains: dict[str, int] = {}
-            prospect_domains: set[str] = set()
+            is_known_domain: bool = False
+            is_known_subdomain: bool = False
+            is_unknown_subdomain: bool = False
+            suspicious_score: int = 0
 
             for known_domain in brand.known_domains:
                 # ------------------------------------
@@ -130,19 +130,19 @@ class Processor:
                 # ------------------------------------
                 if specimen == known_domain:
                     # Found known domains
-                    accepted_domains.add(specimen)
+                    is_known_domain = True
                     continue
 
                 if known_domain.startswith('*.'):
                     if specimen.endswith(known_domain[1:]):
                         # Found known subdomains
-                        accepted_domains.add(specimen)
+                        is_known_subdomain = True
                         continue
                     # Remove prefix and keep searching
                     known_domain = known_domain[2:]
                 elif specimen.endswith(DOT + known_domain):
                     # Found unknown subdomain
-                    unknown_subdomains.add(specimen)
+                    is_unknown_subdomain = True
                     continue
 
                 # --------------------------------
@@ -150,62 +150,47 @@ class Processor:
                 # --------------------------------
                 known_domain_words = known_domain.replace(DOT, SPACE).replace(DASH, SPACE).split(SPACE)
 
+                # if self.contains_word_from_wordlist(specimen, brand.trigger_words) > 0:
+                #     score += self.contains_word_from_wordlist(specimen, brand.score_words)
+
                 # Optimize search speed
                 if not self.contains_all_the_words(specimen, known_domain_words):
                     continue
+                # ----------------------------------------------------------
+                # ---- Stage 0: Check if specimen contains known domain ----
+                # ----------------------------------------------------------
+                suspicious_score = max(suspicious_score, self.score_contains(specimen, known_domain, bias=2))
 
-                # Stage 0
-                score: int = self.score_contains(suspicious_domains, specimen, known_domain, bias=2)
+                # -----------------------------------------------------
+                # ---- Stage 1: All the known domain words ordered ----
+                # -----------------------------------------------------
+                separators = set(product([DOT, DASH, SPACE], repeat=(len(known_domain_words) - 1)))  # TODO: Result should be cached
 
-                # Stage 1: look for domain contains something like 'services-apple.com.' ...
-                separators = set(  # TODO: Result should be cached
-                    product([DOT, DASH, SPACE], repeat=(len(known_domain_words) - 1))
-                )
+                stage_1_permutations: set[str] = {''.join(roundrobin(known_domain_words, separator)).replace(' ', '') for separator in separators}
+                stage_1_permutations.discard(known_domain)  # Remove dupes already checked
+                suspicious_score = max(suspicious_score, max([self.score_contains(specimen, stage_1_permutation, bias=1) for stage_1_permutation in stage_1_permutations]))
 
-                stage_1_permutations: set[str] = {
-                    ''.join(roundrobin(known_domain_words, separator)).replace(' ', '')
-                    for separator in separators
-                }
-                # Remove already processed at Stage 0
-                stage_1_permutations = set(filter(lambda prospect: known_domain not in prospect, stage_1_permutations))
-
-                score += sum([self.score_contains(suspicious_domains, specimen, prospect, bias=1)
-                              for prospect in stage_1_permutations])
-
-                # Stage 2: look for domain contains something like '.com.services.apple.' ... #
-                known_domain_words_permutations = list(permutations(known_domain_words))
+                # -------------------------------------------------------
+                # ---- Stage 2: All the known domain words unordered ----
+                # -------------------------------------------------------
                 stage_2_permutations: set[str] = {
                     ''.join(roundrobin(known_domain_words_permutation, separator)).replace(' ', '')
                     for separator in separators
-                    for known_domain_words_permutation in known_domain_words_permutations
+                    for known_domain_words_permutation in permutations(known_domain_words)
                 }
-                # Remove dupes already checked (we do this even so the score would have been smaller)
-                stage_2_permutations = set(
-                    filter(lambda prospect: known_domain not in prospect, stage_2_permutations)) - stage_1_permutations
-                score += sum([self.score_contains(suspicious_domains, specimen, prospect, bias=0) for prospect in
-                              stage_2_permutations])
+                # Remove dupes already checked
+                stage_2_permutations.discard(known_domain)
+                stage_2_permutations -= stage_1_permutations
+                suspicious_score = max(suspicious_score, max([self.score_contains(specimen, stage_2_permutation, bias=0) for stage_2_permutation in stage_2_permutations]))
 
-                if score == 0:
-                    prospect_domains.add(specimen)
-
-            # Remove from unknown_subdomains if they also exist in accepted_domains
-            unknown_subdomains -= accepted_domains
-            # Remove from suspicious_domains if they also exist in accepted_domains or unknown_subdomains
-            [suspicious_domains.pop(d) for d in unknown_subdomains | accepted_domains if d in suspicious_domains]
-            # Remove from prospect_domains if they also exist in suspicious_domains, accepted_domains or unknown_subdomains
-            prospect_domains -= suspicious_domains.keys() | unknown_subdomains | accepted_domains
-
-            # for accepted_domain in accepted_domains:
-            #     print(f'Known       {brand.brand} | 0 {accepted_domain}')
-            for unknown_subdomain in unknown_subdomains:
-                print(f'Unknown sub [{brand.brand}] | 0 [{unknown_subdomain}]')
-            for suspicious_domain, score in suspicious_domains.items():
-                print(f'Suspicious  [{brand.brand}] | {score} [{suspicious_domain}]')
-            for prospect_domain in prospect_domains:
-                print(f'Prospect    [{brand.brand}] | 0 [{prospect_domain}]')
-
-    def score_stage_0(self, known_domain, specimen, suspicious_domains):
-        return self.score_contains(suspicious_domains, specimen, known_domain, bias=2)
+            if is_known_domain:
+                print(f'Known      [{brand.brand}] | 0 {specimen}')
+            elif is_known_subdomain:
+                print(f'Known sub   [{brand.brand}] | 0 [{specimen}]')
+            elif is_unknown_subdomain:
+                print(f'Unknown sub [{brand.brand}] | 0 [{specimen}]')
+            elif suspicious_score > 0:
+                print(f'Suspicious  [{brand.brand}] | {suspicious_score} [{specimen}]')
 
     def contains_all_the_words(self, domain, known_domain_words):
         for word in known_domain_words:
@@ -213,7 +198,14 @@ class Processor:
                 return False
         return True
 
-    def score_contains(self, score_card: dict[str, int], specimen: str, artifact: str, bias: int) -> int:
+    def contains_word_from_wordlist(self, specimen, word_list) -> int:
+        score = 0
+        for word in word_list:
+            if word in specimen:
+                score += 1
+        return score
+
+    def score_contains(self, specimen: str, artifact: str, bias: int) -> int:
         if self.total_permutations_checked % 10000 == 0 or self.total_permutations_checked == 0:
             log.info(f'Permutations checked {self.total_permutations_checked}')
         self.total_permutations_checked += 1
@@ -231,10 +223,6 @@ class Processor:
 
         if score > 0:
             score += bias
-            if specimen in score_card:
-                score_card[specimen] = max(score, score_card[specimen])
-            else:
-                score_card[specimen] = score
 
         return score
 
