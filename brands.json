@@ -44,7 +44,8 @@
   {
     "brand": "Nets",
     "known_domains": [
-      "nets.dk"
+      "nets.dk",
+      "nets.eu"
     ],
     "trigger_words": [
       "nets"
@@ -68,7 +69,8 @@
       "www.post-nord.com",
       "www.post-danmark.dk",
       "www.post-danmark.com",
-      "www.post.dk"
+      "www.post.dk",
+      "postnord.com"
     ],
     "trigger_words": [
       "post*nord",
@@ -80,7 +82,9 @@
       "nord",
       "danmark",
       "denmark",
-      "pakke"
+      "pakke",
+      "track",
+      "tracking"
     ]
   },
   {
@@ -117,8 +121,7 @@
   {
     "brand": "Apple",
     "known_domains": [
-      "apple.com",
-      "new.apple.com",
+      "*.apple.com",
       "apple.co",
       "apple.com.cn",
       "aaplimg.com",
@@ -215,7 +218,9 @@
       "lost",
       "ios",
       "subscription",
-      "history"
+      "history",
+      "identity",
+      "redirect"
     ]
   }
 ]

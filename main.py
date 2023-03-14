@@ -119,47 +119,61 @@ class Processor:
             if not brand.enabled:
                 continue
 
-            is_known_domain: bool = False
-            is_known_subdomain: bool = False
-            is_unknown_subdomain: bool = False
-            suspicious_score: int = 0
+            kind, score = self.calc_domain_score(brand, specimen)
 
-            for known_domain in brand.known_domains:
-                # ------------------------------------
-                # ---- Check for direct ownership ----
-                # ------------------------------------
-                if specimen == known_domain:
-                    # Found known domains
+            if kind == 1:
+                print(f'Known       {score} | [{specimen}] | [{brand.brand}]')
+            elif kind == 2:
+                print(f'Known sub   {score} | [{specimen}] | [{brand.brand}]')
+            elif kind == 3:
+                print(f'Unknown sub {score} | [{specimen}] | [{brand.brand}]')
+            elif score > 0:
+                print(f'Suspicious  {score} | [{specimen}] | [{brand.brand}]')
+
+    def calc_domain_score(self, brand, specimen) -> (int, int):
+        is_known_domain: bool = False
+        is_known_subdomain: bool = False
+        is_unknown_subdomain: bool = False
+        domain_score: int = 0
+        for known_domain in brand.known_domains:
+            # ------------------------------------
+            # ---- Check for direct ownership ----
+            # ------------------------------------
+            if specimen == known_domain:
+                # Found known domains
+                is_known_domain = True
+                continue
+
+            if known_domain.startswith('*.'):
+                # rule *.apple.com matching specimen apple.com as known domain
+                if specimen == known_domain[2:]:
                     is_known_domain = True
                     continue
 
-                if known_domain.startswith('*.'):
-                    if specimen.endswith(known_domain[1:]):
-                        # Found known subdomains
-                        is_known_subdomain = True
-                        continue
-                    # Remove prefix and keep searching
-                    known_domain = known_domain[2:]
-                elif specimen.endswith(DOT + known_domain):
-                    # Found unknown subdomain
-                    is_unknown_subdomain = True
+                # rule *.apple.com matching specimen www.apple.com as known subdomain
+                if specimen.endswith(known_domain[1:]):
+                    # Found known subdomains
+                    is_known_subdomain = True
                     continue
+                # Remove prefix and keep searching
+                known_domain = known_domain[2:]
+            elif specimen.endswith(DOT + known_domain):
+                # Found unknown subdomain
+                is_unknown_subdomain = True
+                continue
 
-                # --------------------------------
-                # ---- Check for permutations ----
-                # --------------------------------
-                known_domain_words = known_domain.replace(DOT, SPACE).replace(DASH, SPACE).split(SPACE)
+            score: int = 0
+            # --------------------------------
+            # ---- Check for permutations ----
+            # --------------------------------
+            known_domain_words = known_domain.replace(DOT, SPACE).replace(DASH, SPACE).split(SPACE)
 
-                # if self.contains_word_from_wordlist(specimen, brand.trigger_words) > 0:
-                #     score += self.contains_word_from_wordlist(specimen, brand.score_words)
-
-                # Optimize search speed
-                if not self.contains_all_the_words(specimen, known_domain_words):
-                    continue
+            # Optimize search speed
+            if self.contains_all_the_words(specimen, known_domain_words):
                 # ----------------------------------------------------------
                 # ---- Stage 0: Check if specimen contains known domain ----
                 # ----------------------------------------------------------
-                suspicious_score = max(suspicious_score, self.score_contains(specimen, known_domain, bias=2))
+                score = max(score, self.score_contains(specimen, known_domain, bias=2))
 
                 # -----------------------------------------------------
                 # ---- Stage 1: All the known domain words ordered ----
@@ -168,7 +182,7 @@ class Processor:
 
                 stage_1_permutations: set[str] = {''.join(roundrobin(known_domain_words, separator)).replace(' ', '') for separator in separators}
                 stage_1_permutations.discard(known_domain)  # Remove dupes already checked
-                suspicious_score = max(suspicious_score, max([self.score_contains(specimen, stage_1_permutation, bias=1) for stage_1_permutation in stage_1_permutations]))
+                score = max(score, max([self.score_contains(specimen, stage_1_permutation, bias=1) for stage_1_permutation in stage_1_permutations]))
 
                 # -------------------------------------------------------
                 # ---- Stage 2: All the known domain words unordered ----
@@ -181,16 +195,25 @@ class Processor:
                 # Remove dupes already checked
                 stage_2_permutations.discard(known_domain)
                 stage_2_permutations -= stage_1_permutations
-                suspicious_score = max(suspicious_score, max([self.score_contains(specimen, stage_2_permutation, bias=0) for stage_2_permutation in stage_2_permutations]))
+                score = max(score, max([self.score_contains(specimen, stage_2_permutation, bias=0) for stage_2_permutation in stage_2_permutations]))
 
-            if is_known_domain:
-                print(f'Known      [{brand.brand}] | 0 {specimen}')
-            elif is_known_subdomain:
-                print(f'Known sub   [{brand.brand}] | 0 [{specimen}]')
-            elif is_unknown_subdomain:
-                print(f'Unknown sub [{brand.brand}] | 0 [{specimen}]')
-            elif suspicious_score > 0:
-                print(f'Suspicious  [{brand.brand}] | {suspicious_score} [{specimen}]')
+                # -----------------------------------------------
+                # ---- Stage 3: Extra points for score words ----
+                # -----------------------------------------------
+                score += self.count_word_from_wordlist(specimen, brand.score_words)  # TODO: Should we score both myaccount and account in myaccount.apple.com.baddomain.com ?
+
+                domain_score = max(domain_score, score)
+
+        if self.contains_word_from_wordlist(specimen, brand.trigger_words):  # Implement permutations of * in trigger word
+            domain_score = max(domain_score, self.count_word_from_wordlist(specimen, brand.score_words))
+
+        if is_known_domain:
+            return 1, 0
+        if is_known_subdomain:
+            return 2, 0
+        if is_unknown_subdomain:
+            return 3, 0
+        return 0, domain_score
 
     def contains_all_the_words(self, domain, known_domain_words):
         for word in known_domain_words:
@@ -199,6 +222,12 @@ class Processor:
         return True
 
     def contains_word_from_wordlist(self, specimen, word_list) -> int:
+        for word in word_list:
+            if word in specimen:
+                return True
+        return False
+
+    def count_word_from_wordlist(self, specimen, word_list) -> int:
         score = 0
         for word in word_list:
             if word in specimen:
@@ -221,7 +250,7 @@ class Processor:
                      + self.has_dot_or_dash_at_index(specimen, specimen.index(artifact) - 1) \
                      + self.has_dot_or_dash_at_index(specimen, specimen.index(artifact) + len(artifact))
 
-        if score > 0:
+        if score:
             score += bias
 
         return score
