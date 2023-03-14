@@ -204,7 +204,13 @@ class Processor:
 
                 domain_score = max(domain_score, score)
 
-        if self.contains_word_from_wordlist(specimen, brand.trigger_words):  # Implement permutations of * in trigger word
+        trigger_words: set[str] = {
+            ''.join(roundrobin(trigger_word.split('*'), separator)).replace(' ', '')
+            for trigger_word in brand.trigger_words
+            for separator in set(product([DOT, DASH, SPACE], repeat=trigger_word.count('*')))
+        }
+
+        if self.contains_word_from_wordlist(specimen, trigger_words):
             domain_score = max(domain_score, self.count_word_from_wordlist(specimen, brand.score_words))
 
         if is_known_domain:
