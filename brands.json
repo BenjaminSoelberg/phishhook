@@ -122,15 +122,15 @@
     "brand": "Apple",
     "known_domains": [
       "*.apple.com",
-      "apple.co",
-      "apple.com.cn",
-      "aaplimg.com",
-      "apple-dns.cn",
-      "apple-dns.net",
-      "apple-mapkit.com",
-      "apple.news",
-      "cdn-apple.com",
-      "mzstatic.com,"
+      "*.apple.co",
+      "*.apple.com.cn",
+      "*.aaplimg.com",
+      "*.apple-dns.cn",
+      "*.apple-dns.net",
+      "*.apple-mapkit.com",
+      "*.apple.news",
+      "*.cdn-apple.com",
+      "*.mzstatic.com,"
     ],
     "trigger_words": [
       "apple"
