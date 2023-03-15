@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from marshmallow_dataclass import add_schema
 
@@ -10,6 +10,7 @@ class Brand:
     known_domains: list[str]
     trigger_words: list[str]
     score_words: list[str]
+    ignored_domains: list[str] = list
     enabled: bool = True
 
     class Meta:

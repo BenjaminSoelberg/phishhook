@@ -60,8 +60,10 @@
   {
     "brand": "Post Nord",
     "known_domains": [
+      "postnord.dk",
       "post-nord.dk",
       "post-nord.com",
+      "postdanmark.dk",
       "post-danmark.dk",
       "post-danmark.com",
       "post.dk",
@@ -70,7 +72,8 @@
       "www.post-danmark.dk",
       "www.post-danmark.com",
       "www.post.dk",
-      "postnord.com"
+      "postnord.com",
+      "postnordplus.com"
     ],
     "trigger_words": [
       "post*nord",
@@ -85,13 +88,17 @@
       "pakke",
       "track",
       "tracking"
+    ],
+    "ignored_domains": [
+      "*.postgres.database.azure.com"
     ]
   },
   {
     "brand": "Danske Bank",
     "known_domains": [
       "danske-bank.dk",
-      "danskebank.dk"
+      "danskebank.dk",
+      "danskebank.com"
     ],
     "trigger_words": [
       "danske*bank"

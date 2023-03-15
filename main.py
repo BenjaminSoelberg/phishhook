@@ -21,6 +21,7 @@ DOT = '.'
 DASH = '-'
 SPACE = ' '
 DOT_DASH = '.-'
+DOT_STAR = '*.'
 SEEN_DOMAIN_CACHE_SIZE = 100000
 
 logging.basicConfig(
@@ -81,7 +82,7 @@ class Processor:
                         queried += 1
                         doc = json.loads(data)
                         for domain in doc['data']['leaf_cert']['all_domains']:
-                            if domain.startswith('*.'):
+                            if domain.startswith(DOT_STAR):
                                 domain = domain[2:]
                             if domain not in self._seen_domain_cache:
                                 self._seen_domain_cache.append(domain)
@@ -116,7 +117,7 @@ class Processor:
 
     def check_domain(self, specimen):
         for brand in self._brands:
-            if not brand.enabled:
+            if not brand.enabled or self.is_ignored(specimen, brand.ignored_domains):
                 continue
 
             kind, score = self.calc_domain_score(brand, specimen)
@@ -129,6 +130,16 @@ class Processor:
                 print(f'Unknown sub {score} | [{specimen}] | [{brand.brand}]')
             elif score > 0:
                 print(f'Suspicious  {score} | [{specimen}] | [{brand.brand}]')
+
+    def is_ignored(self, specimen: str, ignored_domains: list[str]) -> bool:
+        for ignored_domain in ignored_domains:
+            if ignored_domain.startswith(DOT_STAR):
+                if specimen.endswith(ignored_domain[1:]):
+                    return True
+            elif specimen == ignored_domain:
+                return True
+
+        return False
 
     def calc_domain_score(self, brand, specimen) -> (int, int):
         is_known_domain: bool = False
@@ -144,7 +155,7 @@ class Processor:
                 is_known_domain = True
                 continue
 
-            if known_domain.startswith('*.'):
+            if known_domain.startswith(DOT_STAR):
                 # rule *.apple.com matching specimen apple.com as known domain
                 if specimen == known_domain[2:]:
                     is_known_domain = True
