@@ -122,14 +122,18 @@ class Processor:
 
             kind, score = self.calc_domain_score(brand, specimen)
 
-            if kind == 1:
+            if kind == 0:
+                continue
+            elif kind == 1:
                 print(f'Known       {score} | [{specimen}] | [{brand.brand}]')
             elif kind == 2:
                 print(f'Known sub   {score} | [{specimen}] | [{brand.brand}]')
             elif kind == 3:
                 print(f'Unknown sub {score} | [{specimen}] | [{brand.brand}]')
-            elif score > 0:
+            elif kind == 4:
                 print(f'Suspicious  {score} | [{specimen}] | [{brand.brand}]')
+            else:
+                assert "Unknown kind" + kind
 
     def is_ignored(self, specimen: str, ignored_domains: list[str]) -> bool:
         for ignored_domain in ignored_domains:
@@ -215,6 +219,13 @@ class Processor:
 
                 domain_score = max(domain_score, score)
 
+        if is_known_domain:
+            return 1, 0
+        if is_known_subdomain:
+            return 2, 0
+        if is_unknown_subdomain:
+            return 3, 0
+
         trigger_words: set[str] = {
             ''.join(roundrobin(trigger_word.split('*'), separator)).replace(' ', '')
             for trigger_word in brand.trigger_words
@@ -224,13 +235,10 @@ class Processor:
         if self.contains_word_from_wordlist(specimen, trigger_words):
             domain_score = max(domain_score, self.count_word_from_wordlist(specimen, brand.score_words))
 
-        if is_known_domain:
-            return 1, 0
-        if is_known_subdomain:
-            return 2, 0
-        if is_unknown_subdomain:
-            return 3, 0
-        return 0, domain_score
+        if domain_score > 0:
+            return 4, domain_score
+
+        return 0, 0
 
     def contains_all_the_words(self, domain, known_domain_words):
         for word in known_domain_words:
