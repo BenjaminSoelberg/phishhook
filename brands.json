@@ -14,6 +14,19 @@
     ]
   },
   {
+    "enabled": false,
+    "brand": "GLS",
+    "known_domains": [
+      "gls.dk"
+    ],
+    "trigger_words": [
+      "gls"
+    ],
+    "score_words": [
+      "gls"
+    ]
+  },
+  {
     "brand": "MitID",
     "known_domains": [
       "mit-id.dk",

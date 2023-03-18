@@ -12,6 +12,7 @@ from typing import Any
 import aioconsole
 import websockets
 from more_itertools import roundrobin
+from nslookup import Nslookup
 from persistqueue import Empty, SQLiteQueue, SQLiteAckQueue
 from websockets.exceptions import ConnectionClosedError
 
@@ -64,6 +65,7 @@ class Processor:
             self._queue: SQLiteAckQueue = SQLiteAckQueue(DOT, auto_commit=True)
 
         self._ssl_context: SSLContext = SSLContext()
+        self.dns_query = Nslookup()
 
         super().__init__()
 
@@ -120,20 +122,20 @@ class Processor:
             if not brand.enabled or self.is_ignored(specimen, brand.ignored_domains):
                 continue
 
-            kind, score = self.calc_domain_score(brand, specimen)
+            kind, score, state = self.calc_domain_score(brand, specimen)
 
             if kind == 0:
                 continue
             elif kind == 1:
-                print(f'Known       {score} | [{specimen}] | [{brand.brand}]')
+                print(f'Known       {score} | [{state}] | [{specimen}] | [{brand.brand}]')
             elif kind == 2:
-                print(f'Known sub   {score} | [{specimen}] | [{brand.brand}]')
+                print(f'Known sub   {score} | [{state}] | [{specimen}] | [{brand.brand}]')
             elif kind == 3:
-                print(f'Unknown sub {score} | [{specimen}] | [{brand.brand}]')
+                print(f'Unknown sub {score} | [{state}] | [{specimen}] | [{brand.brand}]')
             elif kind == 4:
-                print(f'Suspicious  {score} | [{specimen}] | [{brand.brand}]')
+                print(f'Suspicious  {score} | [{state}] | [{specimen}] | [{brand.brand}]')
             else:
-                assert "Unknown kind" + kind
+                assert "Unknown kind: [" + kind + "]"
 
     def is_ignored(self, specimen: str, ignored_domains: list[str]) -> bool:
         for ignored_domain in ignored_domains:
@@ -145,7 +147,7 @@ class Processor:
 
         return False
 
-    def calc_domain_score(self, brand, specimen) -> (int, int):
+    def calc_domain_score(self, brand, specimen) -> (int, int, str):
         is_known_domain: bool = False
         is_known_subdomain: bool = False
         is_unknown_subdomain: bool = False
@@ -209,7 +211,7 @@ class Processor:
                 }
                 # Remove dupes already checked
                 stage_2_permutations.discard(known_domain)
-                stage_2_permutations -= stage_1_permutations
+                stage_2_permutations -= stage_1_permutations  # Remove dupes already checked
                 score = max(score, max([self.score_contains(specimen, stage_2_permutation, bias=0) for stage_2_permutation in stage_2_permutations]))
 
                 # -----------------------------------------------
@@ -220,11 +222,11 @@ class Processor:
                 domain_score = max(domain_score, score)
 
         if is_known_domain:
-            return 1, 0
+            return 1, 0, self.get_state(specimen)
         if is_known_subdomain:
-            return 2, 0
+            return 2, 0, self.get_state(specimen)
         if is_unknown_subdomain:
-            return 3, 0
+            return 3, 0, self.get_state(specimen)
 
         trigger_words: set[str] = {
             ''.join(roundrobin(trigger_word.split('*'), separator)).replace(' ', '')
@@ -236,11 +238,17 @@ class Processor:
             domain_score = max(domain_score, self.count_word_from_wordlist(specimen, brand.score_words))
 
         if domain_score > 0:
-            return 4, domain_score
+            return 4, domain_score, self.get_state(specimen)
 
-        return 0, 0
+        return 0, 0, None
 
-    def contains_all_the_words(self, domain, known_domain_words):
+    def get_state(self, domain: str) -> str:
+        if len(self.dns_query.dns_lookup(domain).answer) > 0:
+            return " active "
+        else:
+            return "inactive"
+
+    def contains_all_the_words(self, domain, known_domain_words) -> bool:
         for word in known_domain_words:
             if word not in domain:
                 return False

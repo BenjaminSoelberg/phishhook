@@ -1,3 +1,4 @@
-aioconsole~=0.6.0
+aioconsole~=0.6.1
 persistQueue~=0.1.6
 websockets~=10.4
+nslookup~=1.7.0
