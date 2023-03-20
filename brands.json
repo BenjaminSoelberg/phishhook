@@ -86,7 +86,8 @@
       "www.post-danmark.com",
       "www.post.dk",
       "postnord.com",
-      "postnordplus.com"
+      "postnordplus.com",
+      "postnord.no"
     ],
     "trigger_words": [
       "post*nord",

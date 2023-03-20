@@ -18,6 +18,10 @@ from websockets.exceptions import ConnectionClosedError
 
 from brand import Brand
 
+# TODO: Add idna support like
+# x = b'xn--postbdenhjort-tfb70a.dk.linux34.curanetserver.dk'
+# x.decode('idna')
+
 DOT = '.'
 DASH = '-'
 SPACE = ' '
@@ -127,13 +131,13 @@ class Processor:
             if kind == 0:
                 continue
             elif kind == 1:
-                print(f'Known       {score} | [{state}] | [{specimen}] | [{brand.brand}]')
+                print(f'Known       {score} | [{state}] | [{brand.brand}] | [{specimen}]')
             elif kind == 2:
-                print(f'Known sub   {score} | [{state}] | [{specimen}] | [{brand.brand}]')
+                print(f'Known sub   {score} | [{state}] | [{brand.brand}] | [{specimen}]')
             elif kind == 3:
-                print(f'Unknown sub {score} | [{state}] | [{specimen}] | [{brand.brand}]')
+                print(f'Unknown sub {score} | [{state}] | [{brand.brand}] | [{specimen}]')
             elif kind == 4:
-                print(f'Suspicious  {score} | [{state}] | [{specimen}] | [{brand.brand}]')
+                print(f'Suspicious  {score} | [{state}] | [{brand.brand}] | [{specimen}]')
             else:
                 assert "Unknown kind: [" + kind + "]"
 
