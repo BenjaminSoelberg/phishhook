@@ -1,6 +1,15 @@
-/data.db
+# Pycharm user-specific stuff
+.idea/**/workspace.xml
+.idea/**/tasks.xml
+.idea/**/usage.statistics.xml
+.idea/**/dictionaries
+.idea/**/shelf
+
+# Python virtuel environment
 /venv/
-/data.db-shm
-/data.db-wal
-/domains.txt
-/top10milliondomains.csv
+
+#Phishhook queue files
+/data.db*
+
+# Ignore log files
+all_domains.txt

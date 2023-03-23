@@ -1,0 +1,14 @@
+# Pycharm project files
+.idea
+
+# Python virtuel environment
+venv/
+
+#Phishhook test data
+testdata
+
+#Phishhook queue files
+data.db*
+
+# Ignore log files
+all_domains.txt

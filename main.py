@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+
 import asyncio
 import json
 import logging
@@ -44,7 +45,7 @@ def is_idn(domain: str):
 
 
 def read_brands() -> list[Brand]:
-    with open(file='brands.json', mode='r') as f:
+    with open(file='config/brands.json', mode='r') as f:
         json_data: str = f.read()
         return Brand.Schema().loads(json_data, many=True)
 
@@ -60,7 +61,6 @@ class Processor:
         self._brands = brands
         self._uri = uri
         self._auto_remove: bool = auto_remove
-        self.total_permutations_checked = 0
         self._seen_domain_cache = deque(maxlen=SEEN_DOMAIN_CACHE_SIZE)
         # Setup queue
         if auto_remove:
@@ -105,23 +105,27 @@ class Processor:
 
     async def process_queue(self) -> None:
         processed: int = 0
-        while True:
-            if processed % 10000 == 0 or processed == 0:
-                log.info(f'Processed domains: {processed}')
+        with open(file='all_domains.txt', mode='a') as all_domains:
+            while True:
+                if processed % 10000 == 0 or processed == 0:
+                    log.info(f'Processed domains: {processed}')
 
-            try:
-                domain: str = self._queue.get_nowait()
-                if domain is None:
-                    continue
+                try:
+                    domain: str = self._queue.get_nowait()
+                    if domain is None:
+                        continue
 
-                self.check_domain(domain)
+                    all_domains.write(f'{domain}\n')
+                    all_domains.flush()
+                    self.check_domain(domain)
 
-            except Empty:
-                await asyncio.sleep(0.5)
+                except Empty:
+                    await asyncio.sleep(0.5)
 
-            processed += 1
+                processed += 1
 
     def check_domain(self, specimen):
+        log.debug(f'Looking at {specimen}')
         for brand in self._brands:
             if not brand.enabled or self.is_ignored(specimen, brand.ignored_domains):
                 continue
@@ -139,7 +143,7 @@ class Processor:
             elif kind == 4:
                 print(f'Suspicious  {score} | [{state}] | [{brand.brand}] | [{specimen}]')
             else:
-                assert "Unknown kind: [" + kind + "]"
+                assert f'Unknown kind: [{kind}]'
 
     def is_ignored(self, specimen: str, ignored_domains: list[str]) -> bool:
         for ignored_domain in ignored_domains:
@@ -272,10 +276,6 @@ class Processor:
         return score
 
     def score_contains(self, specimen: str, artifact: str, bias: int) -> int:
-        if self.total_permutations_checked % 10000 == 0 or self.total_permutations_checked == 0:
-            log.info(f'Permutations checked {self.total_permutations_checked}')
-        self.total_permutations_checked += 1
-
         score: int = 0
         if specimen.startswith(artifact):
             score += 4 + self.has_dot_or_dash_at_index(specimen, len(artifact))
@@ -310,7 +310,7 @@ async def main():
     processor: Processor = Processor(auto_remove=True, brands=brands)
 
     if False:
-        with open(file='phishingdomains.bin', mode='r') as file:
+        with open(file='testdata/domains.bad', mode='r') as file:
             for line in file:
                 domain = line.split('#')[0].strip()
                 if domain:

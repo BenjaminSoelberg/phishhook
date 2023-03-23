@@ -1,4 +1,8 @@
-aioconsole~=0.6.1
-persistQueue~=0.1.6
+aioconsole~=0.6
+dnspython~=2.3
+marshmallow-dataclass~=8.5
+marshmallow~=3.19
+more-itertools~=9.1
+persist-queue~=0.8
 websockets~=10.4
-nslookup~=1.7.0
+nslookup~=1.7
