@@ -1,3 +1,5 @@
+testdata/domains.good filter=lfs diff=lfs merge=lfs -text
+testdata/domains.bad filter=lfs diff=lfs merge=lfs -text
 /phishingdomains.txt filter=lfs diff=lfs merge=lfs -text
 /phishingdomains.bin filter=lfs diff=lfs merge=lfs -text
 /testdata/domains.bad filter=lfs diff=lfs merge=lfs -text
