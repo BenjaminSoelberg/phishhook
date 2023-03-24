@@ -5,7 +5,7 @@
 venv/
 
 #Phishhook test data
-testdata
+testdata/*
 
 #Phishhook queue files
 data.db*

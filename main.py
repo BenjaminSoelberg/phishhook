@@ -144,6 +144,7 @@ class Processor:
                 print(f'Suspicious  {score} | [{state}] | [{brand.brand}] | [{specimen}]')
             else:
                 assert f'Unknown kind: [{kind}]'
+            sys.stdout.flush()
 
     def is_ignored(self, specimen: str, ignored_domains: list[str]) -> bool:
         for ignored_domain in ignored_domains:
