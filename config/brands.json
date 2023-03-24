@@ -112,7 +112,8 @@
     "known_domains": [
       "danske-bank.dk",
       "danskebank.dk",
-      "danskebank.com"
+      "danskebank.com",
+      "danskebank.no"
     ],
     "trigger_words": [
       "danske*bank"
